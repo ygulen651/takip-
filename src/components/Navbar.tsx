@@ -13,7 +13,6 @@ export default function Navbar() {
     { href: "/dashboard", label: "Dashboard", forAdmin: false },
     { href: "/clients", label: "Müşteriler", forAdmin: true },
     { href: "/projects", label: "Projeler", forAdmin: true },
-    { href: "/tasks", label: "Görevler", forAdmin: true },
     { href: "/my-tasks", label: "Görevlerim", forAdmin: false },
     { href: "/reports", label: "Raporlar", forAdmin: true },
     { href: "/admin", label: "Admin Panel", forAdmin: true },

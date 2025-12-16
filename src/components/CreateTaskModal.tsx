@@ -12,12 +12,15 @@ export default function CreateTaskModal({
   isAdmin,
   onClose,
 }: CreateTaskModalProps) {
+  const [clients, setClients] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    clientId: "",
     projectId: "",
     assigneeId: "",
     status: "BACKLOG",
@@ -27,9 +30,22 @@ export default function CreateTaskModal({
   });
 
   useEffect(() => {
+    fetchClients();
     fetchProjects();
     fetchUsers();
   }, []);
+
+  const fetchClients = async () => {
+    try {
+      const res = await fetch("/api/clients");
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data);
+      }
+    } catch (error) {
+      console.error("Clients fetch error:", error);
+    }
+  };
 
   const fetchProjects = async () => {
     try {
@@ -40,6 +56,16 @@ export default function CreateTaskModal({
       }
     } catch (error) {
       console.error("Projects fetch error:", error);
+    }
+  };
+
+  const handleClientChange = (clientId: string) => {
+    setFormData({ ...formData, clientId, projectId: "" });
+    if (clientId) {
+      const filtered = projects.filter((p: any) => p.clientId._id === clientId);
+      setFilteredProjects(filtered);
+    } else {
+      setFilteredProjects([]);
     }
   };
 
@@ -131,23 +157,42 @@ export default function CreateTaskModal({
           </div>
 
           <div>
-            <label className="label">Proje *</label>
+            <label className="label">Müşteri *</label>
             <select
               className="input"
-              value={formData.projectId}
-              onChange={(e) =>
-                setFormData({ ...formData, projectId: e.target.value })
-              }
+              value={formData.clientId}
+              onChange={(e) => handleClientChange(e.target.value)}
               required
             >
-              <option value="">Proje seçin</option>
-              {projects.map((project) => (
-                <option key={project._id} value={project._id}>
-                  {project.name}
+              <option value="">Müşteri seçin</option>
+              {clients.map((client) => (
+                <option key={client._id} value={client._id}>
+                  {client.name}
                 </option>
               ))}
             </select>
           </div>
+
+          {formData.clientId && (
+            <div>
+              <label className="label">Proje *</label>
+              <select
+                className="input"
+                value={formData.projectId}
+                onChange={(e) =>
+                  setFormData({ ...formData, projectId: e.target.value })
+                }
+                required
+              >
+                <option value="">Proje seçin</option>
+                {filteredProjects.map((project) => (
+                  <option key={project._id} value={project._id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="label">Kime Atanacak? *</label>

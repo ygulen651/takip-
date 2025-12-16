@@ -41,8 +41,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(tasks);
   } catch (error: any) {
+    console.error("GET /api/tasks error:", error);
     return NextResponse.json(
-      { error: error.message || "Hata oluştu" },
+      { error: error.message || "Hata oluştu", details: error.stack },
       { status: error.message?.includes("yetkisi") ? 403 : 500 }
     );
   }
@@ -132,8 +133,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(populatedTask, { status: 201 });
   } catch (error: any) {
+    console.error("POST /api/tasks error:", error);
     return NextResponse.json(
-      { error: error.message || "Hata oluştu" },
+      { error: error.message || "Hata oluştu", details: error.stack },
       { status: error.message?.includes("yetkisi") ? 403 : 500 }
     );
   }

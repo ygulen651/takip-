@@ -1,7 +1,6 @@
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
 export interface IProject extends Document {
-  _id: string;
   name: string;
   clientId: mongoose.Types.ObjectId;
   status: "ACTIVE" | "DONE";

@@ -1,7 +1,6 @@
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
 export interface ITask extends Document {
-  _id: string;
   projectId: mongoose.Types.ObjectId;
   assigneeId?: mongoose.Types.ObjectId;
   title: string;

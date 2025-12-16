@@ -1,7 +1,6 @@
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
 export interface ITaskComment extends Document {
-  _id: string;
   taskId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   text: string;

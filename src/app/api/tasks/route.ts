@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Task } from "@/models/Task";
+import { Project } from "@/models/Project";
+import { User } from "@/models/User";
+import { Client } from "@/models/Client";
 import { requireAuth, isAdmin } from "@/lib/auth-helpers";
 
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth();
     await connectDB();
+    
+    // Ensure models are loaded
+    Project;
+    User;
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
@@ -78,9 +85,6 @@ export async function POST(req: NextRequest) {
     let taskProjectId = projectId;
     
     if (!taskProjectId && clientId) {
-      const { Project } = await import("@/models/Project");
-      const { Client } = await import("@/models/Client");
-      
       // Müşterinin aktif projesi var mı?
       let clientProject = await Project.findOne({
         clientId,

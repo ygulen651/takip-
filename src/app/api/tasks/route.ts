@@ -8,12 +8,12 @@ import { requireAuth, isAdmin } from "@/lib/auth-helpers";
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireAuth();
+    await requireAuth();
     await connectDB();
     
-    // Ensure models are loaded
-    Project;
-    User;
+    // Ensure models are loaded for populate
+    void Project;
+    void User;
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");

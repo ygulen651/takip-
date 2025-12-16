@@ -18,14 +18,10 @@ export async function GET(req: NextRequest) {
 
     const query: any = {};
 
-    // Employee can only see their own tasks
-    if (!isAdmin(user)) {
-      query.assigneeId = (user as any).id;
-    } else {
-      // Admin can filter by assigneeId
-      if (assigneeId) {
-        query.assigneeId = assigneeId;
-      }
+    // Everyone can see all tasks now
+    // Admin can filter by assigneeId
+    if (assigneeId) {
+      query.assigneeId = assigneeId;
     }
 
     if (status) query.status = status;

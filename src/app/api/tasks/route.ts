@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       projectId,
+      clientId,
       assigneeId,
       title,
       description,
@@ -69,16 +70,49 @@ export async function POST(req: NextRequest) {
       price,
     } = body;
 
-    if (!projectId || !title) {
+    if (!title) {
       return NextResponse.json(
-        { error: "Proje ve görev başlığı gereklidir" },
+        { error: "Görev başlığı gereklidir" },
+        { status: 400 }
+      );
+    }
+
+    // ProjectId yoksa clientId'den proje bul/oluştur
+    let taskProjectId = projectId;
+    
+    if (!taskProjectId && clientId) {
+      const { Project } = await import("@/models/Project");
+      const { Client } = await import("@/models/Client");
+      
+      // Müşterinin aktif projesi var mı?
+      let clientProject = await Project.findOne({
+        clientId,
+        status: "ACTIVE",
+      });
+
+      // Yoksa oluştur
+      if (!clientProject) {
+        const client = await Client.findById(clientId);
+        clientProject = await Project.create({
+          name: `${client?.name || "Müşteri"} - Genel`,
+          clientId,
+          status: "ACTIVE",
+        });
+      }
+
+      taskProjectId = clientProject._id;
+    }
+
+    if (!taskProjectId) {
+      return NextResponse.json(
+        { error: "Proje veya müşteri gereklidir" },
         { status: 400 }
       );
     }
 
     // Employee can create tasks but with limitations
     const taskData: any = {
-      projectId,
+      projectId: taskProjectId,
       assigneeId,
       title,
       description,

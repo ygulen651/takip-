@@ -57,27 +57,32 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === "google") {
-        await connectDB();
-        
-        // Check if user exists
-        let dbUser = await User.findOne({ email: user.email });
-        
-        if (!dbUser) {
-          // Create new user with Google account
-          dbUser = await User.create({
-            name: user.name,
-            email: user.email,
-            passwordHash: await bcrypt.hash(Math.random().toString(36), 10), // Random password
-            role: "EMPLOYEE", // Default role
-          });
+      try {
+        if (account?.provider === "google") {
+          await connectDB();
+          
+          // Check if user exists
+          let dbUser = await User.findOne({ email: user.email });
+          
+          if (!dbUser) {
+            // Create new user with Google account
+            dbUser = await User.create({
+              name: user.name,
+              email: user.email,
+              passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
+              role: "EMPLOYEE",
+            });
+          }
+          
+          // Update user object with DB data
+          user.id = dbUser._id.toString();
+          (user as any).role = dbUser.role;
         }
-        
-        // Update user object with DB data
-        user.id = dbUser._id.toString();
-        (user as any).role = dbUser.role;
+        return true;
+      } catch (error) {
+        console.error("SignIn callback error:", error);
+        return false;
       }
-      return true;
     },
     async jwt({ token, user }) {
       if (user) {
@@ -101,6 +106,6 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === "development",
+  debug: true,
 };
 

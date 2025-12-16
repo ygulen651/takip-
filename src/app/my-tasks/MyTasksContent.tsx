@@ -33,7 +33,7 @@ const priorityLabels = {
   HIGH: "Yüksek",
 };
 
-export default function MyTasksContent() {
+export default function MyTasksContent({ isAdmin }: { isAdmin: boolean }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -160,13 +160,13 @@ export default function MyTasksContent() {
       {showTaskModal && selectedTask && (
         <TaskModal
           task={selectedTask}
-          isAdmin={false}
+          isAdmin={isAdmin}
           onClose={closeTaskModal}
         />
       )}
 
       {showCreateModal && (
-        <CreateTaskModal isAdmin={false} onClose={closeCreateModal} />
+        <CreateTaskModal isAdmin={isAdmin} onClose={closeCreateModal} />
       )}
     </div>
   );

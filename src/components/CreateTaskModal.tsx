@@ -21,7 +21,6 @@ export default function CreateTaskModal({
     title: "",
     description: "",
     clientId: "",
-    projectId: "",
     assigneeId: "",
     status: "BACKLOG",
     priority: "MEDIUM",
@@ -31,7 +30,6 @@ export default function CreateTaskModal({
 
   useEffect(() => {
     fetchClients();
-    fetchProjects();
     fetchUsers();
   }, []);
 
@@ -44,28 +42,6 @@ export default function CreateTaskModal({
       }
     } catch (error) {
       console.error("Clients fetch error:", error);
-    }
-  };
-
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch("/api/projects");
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data.filter((p: any) => p.status === "ACTIVE"));
-      }
-    } catch (error) {
-      console.error("Projects fetch error:", error);
-    }
-  };
-
-  const handleClientChange = (clientId: string) => {
-    setFormData({ ...formData, clientId, projectId: "" });
-    if (clientId) {
-      const filtered = projects.filter((p: any) => p.clientId._id === clientId);
-      setFilteredProjects(filtered);
-    } else {
-      setFilteredProjects([]);
     }
   };
 
@@ -86,7 +62,35 @@ export default function CreateTaskModal({
     setLoading(true);
 
     try {
-      const payload: any = { ...formData };
+      // Önce müşterinin projelerini al veya oluştur
+      const projectRes = await fetch("/api/projects");
+      const allProjects = await projectRes.json();
+      
+      // Müşterinin aktif projesi var mı?
+      let clientProject = allProjects.find(
+        (p: any) => p.clientId._id === formData.clientId && p.status === "ACTIVE"
+      );
+
+      // Yoksa otomatik proje oluştur
+      if (!clientProject) {
+        const client = clients.find((c) => c._id === formData.clientId);
+        const createProjectRes = await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `${client?.name} - Genel`,
+            clientId: formData.clientId,
+            status: "ACTIVE",
+          }),
+        });
+        clientProject = await createProjectRes.json();
+      }
+
+      const payload: any = {
+        ...formData,
+        projectId: clientProject._id,
+      };
+      
       if (isAdmin) {
         payload.price = parseFloat(formData.price) || 0;
       }
@@ -161,7 +165,9 @@ export default function CreateTaskModal({
             <select
               className="input"
               value={formData.clientId}
-              onChange={(e) => handleClientChange(e.target.value)}
+              onChange={(e) =>
+                setFormData({ ...formData, clientId: e.target.value })
+              }
               required
             >
               <option value="">Müşteri seçin</option>
@@ -172,27 +178,6 @@ export default function CreateTaskModal({
               ))}
             </select>
           </div>
-
-          {formData.clientId && (
-            <div>
-              <label className="label">Proje *</label>
-              <select
-                className="input"
-                value={formData.projectId}
-                onChange={(e) =>
-                  setFormData({ ...formData, projectId: e.target.value })
-                }
-                required
-              >
-                <option value="">Proje seçin</option>
-                {filteredProjects.map((project) => (
-                  <option key={project._id} value={project._id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <div>
             <label className="label">Kime Atanacak? *</label>

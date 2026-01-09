@@ -37,7 +37,7 @@ const UserSchema = new Schema<IUser>(
   }
 );
 
-UserSchema.index({ email: 1 });
+// Redundant index removed as unique: true in schema handles it
 
 export const User = models.User || model<IUser>("User", UserSchema);
 

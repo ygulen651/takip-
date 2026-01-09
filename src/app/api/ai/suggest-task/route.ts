@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       Cevabını doğrudan açıklama metni olarak ver, başka bir giriş yapma.
     `;
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
 
         const response = await fetch(apiUrl, {
             method: "POST",

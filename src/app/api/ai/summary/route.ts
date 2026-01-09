@@ -13,12 +13,6 @@ export async function POST(req: Request) {
         const originalKey = process.env.GEMINI_API_KEY || "";
         const apiKey = originalKey.trim();
 
-        console.log("--- AI DEBUG ---");
-        console.log("Key Length (Original):", originalKey.length);
-        console.log("Key Length (Trimmed):", apiKey.length);
-        console.log("Key Start:", apiKey.substring(0, 7) + "...");
-        console.log("Key End:", "..." + apiKey.substring(apiKey.length - 4));
-
         if (!apiKey || apiKey.length < 10) {
             return NextResponse.json({
                 error: "Geçersiz veya eksik API Anahtarı (.env.local)."
@@ -40,8 +34,8 @@ export async function POST(req: Request) {
       Cevabını Markdown formatında, kısa paragraflar veya maddeler halinde ver. Çok uzun olmasın.
     `;
 
-        // Direct fetch to v1 API to avoid SDK/v1beta issues
-        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // Using gemini-flash-latest as verified by check-models.mjs for better quota availability
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
 
         const response = await fetch(apiUrl, {
             method: "POST",

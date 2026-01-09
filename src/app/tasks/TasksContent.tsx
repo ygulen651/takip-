@@ -2,56 +2,65 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { format } from "date-fns";
-import { tr } from "date-fns/locale";
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragOverEvent,
+  DragEndEvent,
+  defaultDropAnimationSideEffects,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { KanbanColumn } from "@/components/KanbanColumn";
+import { TaskCard } from "@/components/TaskCard";
 import TaskModal from "@/components/TaskModal";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface Task {
-  _id: string;
-  title: string;
-  description?: string;
-  status: "BACKLOG" | "IN_PROGRESS" | "REVIEW" | "DONE";
-  priority: "LOW" | "MEDIUM" | "HIGH";
-  projectId: { _id: string; name: string };
-  assigneeId?: { _id: string; name: string };
-  dueDate?: string;
-  price: number;
-  paymentStatus: "PENDING" | "PARTIAL" | "PAID";
-  paidAmount: number;
-  deliveryLink?: string;
-  createdAt: string;
-}
+import { Task } from "@/types/task";
 
-const statusLabels = {
-  BACKLOG: "Beklemede",
-  IN_PROGRESS: "Devam Ediyor",
-  REVIEW: "İncelemede",
-  DONE: "Tamamlandı",
-};
-
-const priorityLabels = {
-  LOW: "Düşük",
-  MEDIUM: "Orta",
-  HIGH: "Yüksek",
-};
+const COLUMNS = [
+  { id: "BACKLOG", title: "Beklemede" },
+  { id: "IN_PROGRESS", title: "Devam Ediyor" },
+  { id: "REVIEW", title: "İncelemede" },
+  { id: "DONE", title: "Tamamlandı" },
+];
 
 export default function TasksContent({ isAdmin }: { isAdmin: boolean }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     fetchTasks();
-  }, [statusFilter]);
+  }, []);
 
   const fetchTasks = async () => {
     try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.append("status", statusFilter);
-
-      const res = await fetch(`/api/tasks?${params}`);
+      const res = await fetch("/api/tasks");
       if (!res.ok) throw new Error("Veri alınamadı");
       const data = await res.json();
       setTasks(data);
@@ -62,115 +71,175 @@ export default function TasksContent({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("Güncelleme başarısız");
+      toast.success("Durum güncellendi");
+    } catch (error) {
+      toast.error("Durum güncellenemedi");
+      fetchTasks(); // Revert state on error
+    }
+  };
+
+  const onDragStart = (event: DragStartEvent) => {
+    if (event.active.data.current?.type === "Task") {
+      setActiveTask(event.active.data.current.task);
+    }
+  };
+
+  const onDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    if (activeId === overId) return;
+
+    const isActiveATask = active.data.current?.type === "Task";
+    const isOverATask = over.data.current?.type === "Task";
+
+    if (!isActiveATask) return;
+
+    // Dropping a Task over another Task
+    if (isActiveATask && isOverATask) {
+      setTasks((tasks) => {
+        const activeIndex = tasks.findIndex((t) => t._id === activeId);
+        const overIndex = tasks.findIndex((t) => t._id === overId);
+
+        if (tasks[activeIndex].status !== tasks[overIndex].status) {
+          tasks[activeIndex].status = tasks[overIndex].status as any;
+          return arrayMove(tasks, activeIndex, overIndex - 1);
+        }
+
+        return arrayMove(tasks, activeIndex, overIndex);
+      });
+    }
+
+    const isOverAColumn = over.data.current?.type === "Column";
+
+    // Dropping a Task over a Column
+    if (isActiveATask && isOverAColumn) {
+      setTasks((tasks) => {
+        const activeIndex = tasks.findIndex((t) => t._id === activeId);
+        tasks[activeIndex].status = overId as any;
+        return arrayMove(tasks, activeIndex, activeIndex);
+      });
+    }
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const newStatus = over.id as string;
+
+    const task = tasks.find((t) => t._id === taskId);
+    if (task && task.status !== activeTask?.status) {
+      updateTaskStatus(taskId, task.status);
+    }
+  };
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setShowModal(true);
+  };
+
   const openModal = (task?: Task) => {
     setSelectedTask(task || null);
     setShowModal(true);
   };
 
-  const closeModal = () => {
-    setShowModal(false);
-    setSelectedTask(null);
-    fetchTasks();
-  };
-
   if (loading) {
-    return <div className="text-center py-12">Yükleniyor...</div>;
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-primary-600"></div>
+      </div>
+    );
   }
 
-  const groupedTasks = {
-    BACKLOG: tasks.filter((t) => t.status === "BACKLOG"),
-    IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS"),
-    REVIEW: tasks.filter((t) => t.status === "REVIEW"),
-    DONE: tasks.filter((t) => t.status === "DONE"),
-  };
-
   return (
-    <div>
-      <div className="mb-4 flex gap-2">
-        <button onClick={() => openModal()} className="btn-primary">
-          Yeni Görev Ekle
+    <div className="h-[calc(100vh-140px)]">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+            İş Akışı
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+            Görevleri sürükleyerek durumlarını güncelleyin
+          </p>
+        </div>
+        <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+          <span className="text-xl">+</span> Yeni Görev
         </button>
-        <select
-          className="input max-w-xs"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">Tüm Durumlar</option>
-          <option value="BACKLOG">Beklemede</option>
-          <option value="IN_PROGRESS">Devam Ediyor</option>
-          <option value="REVIEW">İncelemede</option>
-          <option value="DONE">Tamamlandı</option>
-        </select>
       </div>
 
-      {/* Kanban View */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Object.entries(groupedTasks).map(([status, statusTasks]) => (
-          <div key={status} className="bg-gray-100 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">
-              {statusLabels[status as keyof typeof statusLabels]} (
-              {statusTasks.length})
-            </h3>
-            <div className="space-y-3">
-              {statusTasks.map((task) => (
-                <div
-                  key={task._id}
-                  onClick={() => openModal(task)}
-                  className="card cursor-pointer hover:shadow-md transition-shadow"
-                >
-                  <h4 className="font-medium text-gray-900 mb-2">
-                    {task.title}
-                  </h4>
-                  <p className="text-xs text-gray-600 mb-2">
-                    {task.projectId.name}
-                  </p>
-                  <div className="flex gap-2 mb-2">
-                    <span
-                      className={`badge badge-priority-${task.priority}`}
-                    >
-                      {priorityLabels[task.priority]}
-                    </span>
-                    {isAdmin && (
-                      <span
-                        className={`badge badge-payment-${task.paymentStatus}`}
-                      >
-                        {task.paymentStatus}
-                      </span>
-                    )}
-                  </div>
-                  {task.assigneeId && (
-                    <p className="text-xs text-gray-500">
-                      {task.assigneeId.name}
-                    </p>
-                  )}
-                  {task.dueDate && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Son:{" "}
-                      {format(new Date(task.dueDate), "dd MMM", {
-                        locale: tr,
-                      })}
-                    </p>
-                  )}
-                  {isAdmin && task.price > 0 && (
-                    <p className="text-xs font-medium text-primary-600 mt-2">
-                      ₺{task.price.toLocaleString("tr-TR")}
-                    </p>
-                  )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+      >
+        <div className="flex gap-6 h-full overflow-x-auto pb-4 custom-scrollbar">
+          {COLUMNS.map((col) => (
+            <KanbanColumn
+              key={col.id}
+              id={col.id}
+              title={col.title}
+              tasks={tasks.filter((t) => t.status === col.id)}
+              isAdmin={isAdmin}
+              onTaskClick={handleTaskClick}
+              onAddTask={openModal}
+            />
+          ))}
+        </div>
+
+        {typeof document !== "undefined" &&
+          createPortal(
+            <DragOverlay
+              dropAnimation={{
+                sideEffects: defaultDropAnimationSideEffects({
+                  styles: {
+                    active: {
+                      opacity: "0.5",
+                    },
+                  },
+                }),
+              }}
+            >
+              {activeTask ? (
+                <div className="scale-105 rotate-3 transition-transform">
+                  <TaskCard
+                    task={activeTask}
+                    isAdmin={isAdmin}
+                    onClick={() => { }}
+                  />
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+              ) : null}
+            </DragOverlay>,
+            document.body
+          )}
+      </DndContext>
 
       {showModal && (
         <TaskModal
           task={selectedTask}
           isAdmin={isAdmin}
-          onClose={closeModal}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedTask(null);
+            fetchTasks();
+          }}
         />
       )}
     </div>
   );
 }
-

@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  X, Sparkles, Calendar, Tag, User,
+  DollarSign, Link as LinkIcon, MessageSquare,
+  Send, CreditCard, ChevronDown, Trash2
+} from "lucide-react";
 
 interface TaskModalProps {
   task: any | null;
@@ -16,6 +22,9 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
   const [users, setUsers] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [isAiSuggesting, setIsAiSuggesting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"detail" | "payment" | "comments">("detail");
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -27,6 +36,7 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
     price: "0",
     deliveryLink: "",
   });
+
   const [paymentData, setPaymentData] = useState({
     price: "0",
     paidAmount: "0",
@@ -41,13 +51,11 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
       setFormData({
         title: task.title,
         description: task.description || "",
-        projectId: task.projectId._id,
+        projectId: task.projectId?._id || "",
         assigneeId: task.assigneeId?._id || "",
         status: task.status,
         priority: task.priority,
-        dueDate: task.dueDate
-          ? format(new Date(task.dueDate), "yyyy-MM-dd")
-          : "",
+        dueDate: task.dueDate ? format(new Date(task.dueDate), "yyyy-MM-dd") : "",
         price: task.price.toString(),
         deliveryLink: task.deliveryLink || "",
       });
@@ -66,9 +74,7 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
         const data = await res.json();
         setProjects(data.filter((p: any) => p.status === "ACTIVE"));
       }
-    } catch (error) {
-      console.error("Projects fetch error:", error);
-    }
+    } catch (error) { }
   };
 
   const fetchUsers = async () => {
@@ -78,9 +84,7 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
         const data = await res.json();
         setUsers(data);
       }
-    } catch (error) {
-      console.error("Users fetch error:", error);
-    }
+    } catch (error) { }
   };
 
   const fetchComments = async () => {
@@ -91,18 +95,38 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
         const data = await res.json();
         setComments(data);
       }
+    } catch (error) { }
+  };
+
+  const handleAiSuggest = async () => {
+    if (!formData.title) {
+      toast.error("Öneri için önce bir başlık girin.");
+      return;
+    }
+    setIsAiSuggesting(true);
+    try {
+      const res = await fetch("/api/ai/suggest-task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: formData.title }),
+      });
+      const data = await res.json();
+      if (data.suggestion) {
+        setFormData({ ...formData, description: data.suggestion });
+        toast.success("AI önerisi uygulandı!");
+      }
     } catch (error) {
-      console.error("Comments fetch error:", error);
+      toast.error("AI hatası.");
+    } finally {
+      setIsAiSuggesting(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
       const url = task ? `/api/tasks/${task._id}` : "/api/tasks";
       const method = task ? "PATCH" : "POST";
-
       const payload: any = { ...formData };
       payload.price = parseFloat(formData.price) || 0;
 
@@ -113,7 +137,6 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
       });
 
       if (!res.ok) throw new Error("İşlem başarısız");
-
       toast.success(task ? "Görev güncellendi" : "Görev oluşturuldu");
       onClose();
     } catch (error) {
@@ -123,7 +146,6 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
 
   const handlePaymentUpdate = async () => {
     if (!task || !isAdmin) return;
-
     try {
       const res = await fetch(`/api/tasks/${task._id}/payment`, {
         method: "PATCH",
@@ -133,9 +155,7 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
           paidAmount: parseFloat(paymentData.paidAmount) || 0,
         }),
       });
-
-      if (!res.ok) throw new Error("Ödeme güncellenemedi");
-
+      if (!res.ok) throw new Error("Hata");
       toast.success("Ödeme güncellendi");
       onClose();
     } catch (error) {
@@ -146,296 +166,298 @@ export default function TaskModal({ task, isAdmin, onClose }: TaskModalProps) {
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task || !newComment.trim()) return;
-
     try {
       const res = await fetch(`/api/tasks/${task._id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: newComment }),
       });
-
-      if (!res.ok) throw new Error("Yorum eklenemedi");
-
-      toast.success("Yorum eklendi");
-      setNewComment("");
-      fetchComments();
-    } catch (error) {
-      toast.error("Yorum eklenemedi");
-    }
-  };
-
-  const statusLabels = {
-    BACKLOG: "Beklemede",
-    IN_PROGRESS: "Devam Ediyor",
-    REVIEW: "İncelemede",
-    DONE: "Tamamlandı",
-  };
-
-  const priorityLabels = {
-    LOW: "Düşük",
-    MEDIUM: "Orta",
-    HIGH: "Yüksek",
+      if (res.ok) {
+        setNewComment("");
+        fetchComments();
+      }
+    } catch (error) { }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg max-w-2xl w-full p-6 my-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          {task ? "Görev Detayı" : "Yeni Görev"}
-        </h2>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+      />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label">Başlık *</label>
-            <input
-              type="text"
-              className="input"
-              value={formData.title}
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              required
-              disabled={!isAdmin && task}
-            />
-          </div>
-
-          <div>
-            <label className="label">Açıklama</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              disabled={!isAdmin && task}
-            />
-          </div>
-
-          {isAdmin && (
-            <>
-              <div>
-                <label className="label">Proje *</label>
-                <select
-                  className="input"
-                  value={formData.projectId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, projectId: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Proje seçin</option>
-                  {projects.map((project) => (
-                    <option key={project._id} value={project._id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Atanan Kişi</label>
-                <select
-                  className="input"
-                  value={formData.assigneeId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, assigneeId: e.target.value })
-                  }
-                >
-                  <option value="">Atama yapılmadı</option>
-                  {users.map((user) => (
-                    <option key={user._id} value={user._id}>
-                      {user.name} - {user.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="relative bg-white dark:bg-dark-bg w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-gray-100 dark:border-dark-border"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-50 dark:border-dark-border bg-gray-50/50 dark:bg-dark-card/50">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${task ? 'bg-primary-100 text-primary-600' : 'bg-emerald-100 text-emerald-600'} dark:bg-primary-900/20`}>
+              {task ? <Tag size={20} /> : <Sparkles size={20} />}
+            </div>
             <div>
-              <label className="label">Durum</label>
-              <select
-                className="input"
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
-                }
-              >
-                {Object.entries(statusLabels).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+                {task ? "Görev Detayı" : "Yeni Görev Oluştur"}
+              </h2>
+              {task && <p className="text-xs font-bold text-gray-400">ID: #{task._id.slice(-6).toUpperCase()}</p>}
             </div>
-
-            {isAdmin && (
-              <div>
-                <label className="label">Öncelik</label>
-                <select
-                  className="input"
-                  value={formData.priority}
-                  onChange={(e) =>
-                    setFormData({ ...formData, priority: e.target.value })
-                  }
-                >
-                  {Object.entries(priorityLabels).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-dark-border transition-colors text-gray-400">
+            <X size={20} />
+          </button>
+        </div>
 
-          {isAdmin && (
-            <>
-              <div>
-                <label className="label">Son Tarih</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={formData.dueDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, dueDate: e.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="label">Fiyat (₺)</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, price: e.target.value })
-                  }
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-            </>
-          )}
-
-          <div>
-            <label className="label">Teslim Linki</label>
-            <input
-              type="url"
-              className="input"
-              value={formData.deliveryLink}
-              onChange={(e) =>
-                setFormData({ ...formData, deliveryLink: e.target.value })
-              }
-              placeholder="https://"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-4">
-            <button type="submit" className="btn-primary flex-1">
-              {task ? "Güncelle" : "Oluştur"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-secondary flex-1"
-            >
-              Kapat
-            </button>
-          </div>
-        </form>
-
-        {/* Payment Section (Admin Only) */}
-        {task && isAdmin && (
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="font-semibold text-gray-900 mb-3">
-              Ödeme Yönetimi
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label">Toplam Fiyat (₺)</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={paymentData.price}
-                  onChange={(e) =>
-                    setPaymentData({ ...paymentData, price: e.target.value })
-                  }
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div>
-                <label className="label">Ödenen Miktar (₺)</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={paymentData.paidAmount}
-                  onChange={(e) =>
-                    setPaymentData({
-                      ...paymentData,
-                      paidAmount: e.target.value,
-                    })
-                  }
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-            </div>
-            <button
-              onClick={handlePaymentUpdate}
-              className="btn-primary w-full mt-3"
-            >
-              Ödeme Güncelle
-            </button>
-            <p className="text-sm text-gray-600 mt-2">
-              Durum: <span className={`badge badge-payment-${task.paymentStatus}`}>
-                {task.paymentStatus}
-              </span>
-            </p>
-          </div>
-        )}
-
-        {/* Comments Section */}
+        {/* Tabs */}
         {task && (
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="font-semibold text-gray-900 mb-3">Yorumlar</h3>
-            <form onSubmit={handleAddComment} className="mb-4">
-              <textarea
-                className="input"
-                rows={2}
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Yorum ekle..."
-              />
-              <button type="submit" className="btn-primary btn-sm mt-2">
-                Yorum Ekle
-              </button>
-            </form>
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {comments.map((comment) => (
-                <div key={comment._id} className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-medium text-sm text-gray-900">
-                      {comment.userId.name}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {format(new Date(comment.createdAt), "dd MMM HH:mm", {
-                        locale: tr,
-                      })}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">{comment.text}</p>
-                </div>
-              ))}
-            </div>
+          <div className="flex p-1 bg-gray-100 dark:bg-dark-border mx-6 mt-4 rounded-xl">
+            <TabButton active={activeTab === 'detail'} onClick={() => setActiveTab('detail')} label="Detaylar" />
+            {isAdmin && <TabButton active={activeTab === 'payment'} onClick={() => setActiveTab('payment')} label="Ödemeler" />}
+            <TabButton active={activeTab === 'comments'} onClick={() => setActiveTab('comments')} label="Yorumlar" count={comments.length} />
           </div>
         )}
-      </div>
+
+        <div className="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          <AnimatePresence mode="wait">
+            {activeTab === 'detail' && (
+              <motion.form
+                key="detail"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                onSubmit={handleSubmit}
+                className="space-y-6"
+              >
+                <div>
+                  <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Görev Başlığı</label>
+                  <input
+                    type="text"
+                    className="premium-input text-lg font-bold"
+                    placeholder="Görev adını girin..."
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    required
+                    disabled={!isAdmin && task}
+                  />
+                </div>
+
+                <div className="relative">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-wider">Açıklama</label>
+                    <button
+                      type="button"
+                      onClick={handleAiSuggest}
+                      disabled={isAiSuggesting}
+                      className="flex items-center gap-1.5 text-xs font-bold text-primary-600 bg-primary-50 dark:bg-primary-900/20 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-all border border-primary-100 dark:border-primary-800"
+                    >
+                      {isAiSuggesting ? <span className="animate-spin text-[10px]">⌛</span> : <Sparkles size={12} />}
+                      AI ile Doldur
+                    </button>
+                  </div>
+                  <textarea
+                    className="premium-input min-h-[120px] scrollbar-hide"
+                    placeholder="Görev detaylarını buraya ekleyin..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    disabled={!isAdmin && task}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {isAdmin && (
+                    <>
+                      <div>
+                        <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Proje</label>
+                        <select
+                          className="premium-input"
+                          value={formData.projectId}
+                          onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                          required
+                        >
+                          <option value="">Seçiniz...</option>
+                          {projects.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Atanan</label>
+                        <select
+                          className="premium-input"
+                          value={formData.assigneeId}
+                          onChange={(e) => setFormData({ ...formData, assigneeId: e.target.value })}
+                        >
+                          <option value="">Atanmamış</option>
+                          {users.map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Durum</label>
+                    <select
+                      className="premium-input border-primary-100"
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <option value="BACKLOG">Beklemede</option>
+                      <option value="IN_PROGRESS">Devam Ediyor</option>
+                      <option value="REVIEW">İncelemede</option>
+                      <option value="DONE">Tamamlandı</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Öncelik</label>
+                    <select
+                      className="premium-input"
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    >
+                      <option value="LOW">Düşük</option>
+                      <option value="MEDIUM">Orta</option>
+                      <option value="HIGH">Yüksek</option>
+                    </select>
+                  </div>
+
+                  {isAdmin && (
+                    <>
+                      <div>
+                        <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Son Tarih</label>
+                        <input
+                          type="date"
+                          className="premium-input"
+                          value={formData.dueDate}
+                          onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">Fiyat (₺)</label>
+                        <input
+                          type="number"
+                          className="premium-input"
+                          value={formData.price}
+                          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="pt-6 border-t border-gray-100 dark:border-dark-border flex gap-3">
+                  <button type="submit" className="flex-1 btn-primary py-4 rounded-2xl shadow-lg shadow-primary-500/20 font-black tracking-tight">
+                    {task ? "DEĞİŞİKLİKLERİ KAYDET" : "GÖREVİ OLUŞTUR"}
+                  </button>
+                </div>
+              </motion.form>
+            )}
+
+            {activeTab === 'payment' && (
+              <motion.div
+                key="payment"
+                initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
+                className="space-y-6"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="premium-card bg-gray-50 dark:bg-dark-card border-none">
+                    <label className="text-xs font-black text-gray-500 uppercase mb-2 block">Toplam Alacak</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-black text-gray-900 dark:text-white">₺</span>
+                      <input
+                        type="number"
+                        className="bg-transparent border-none p-0 focus:ring-0 text-2xl font-black w-full"
+                        value={paymentData.price}
+                        onChange={(e) => setPaymentData({ ...paymentData, price: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="premium-card bg-emerald-50 dark:bg-emerald-900/10 border-none">
+                    <label className="text-xs font-black text-emerald-600 uppercase mb-2 block">Tahsil Edilen</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-black text-emerald-700">₺</span>
+                      <input
+                        type="number"
+                        className="bg-transparent border-none p-0 focus:ring-0 text-2xl font-black w-full text-emerald-700"
+                        value={paymentData.paidAmount}
+                        onChange={(e) => setPaymentData({ ...paymentData, paidAmount: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="premium-card border-dashed">
+                  <div className="flex justify-between items-center text-sm mb-2">
+                    <span className="font-bold text-gray-500 uppercase">Tahsilat Oranı</span>
+                    <span className="font-black text-emerald-600">%{Math.round((parseFloat(paymentData.paidAmount) / (parseFloat(paymentData.price) || 1)) * 100)}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 dark:bg-dark-border h-3 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(parseFloat(paymentData.paidAmount) / (parseFloat(paymentData.price) || 1)) * 100}%` }}
+                      className="h-full bg-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <button onClick={handlePaymentUpdate} className="w-full btn-primary py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20">
+                  ÖDEME BİLGİLERİNİ GÜNCELLE
+                </button>
+              </motion.div>
+            )}
+
+            {activeTab === 'comments' && (
+              <motion.div
+                key="comments"
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="Mesajınızı yazın..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                  />
+                  <button onClick={handleAddComment} className="p-4 bg-primary-600 text-white rounded-2xl hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20">
+                    <Send size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {comments.map((c) => (
+                    <div key={c._id} className="flex gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center font-black text-gray-400">
+                        {c.userId.name.charAt(0)}
+                      </div>
+                      <div className="p-4 rounded-2xl bg-gray-50 dark:bg-dark-card border border-gray-100 dark:border-dark-border flex-1">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm font-black text-gray-900 dark:text-gray-100">{c.userId.name}</span>
+                          <span className="text-[10px] font-bold text-gray-400">{format(new Date(c.createdAt), "dd MMM HH:mm", { locale: tr })}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{c.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
     </div>
   );
 }
 
+function TabButton({ active, onClick, label, count }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all ${active ? 'bg-white dark:bg-dark-bg text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+    >
+      {label} {count !== undefined && <span className="ml-1 opacity-50">({count})</span>}
+    </button>
+  );
+}

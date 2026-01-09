@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "react-hot-toast";
-import { SessionProvider } from "@/components/SessionProvider";
+import { ClientProviders } from "@/components/ClientProviders";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,14 +16,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="tr">
+    <html lang="tr" suppressHydrationWarning>
       <body className={inter.className}>
-        <SessionProvider>
+        <ClientProviders>
           {children}
-          <Toaster position="top-right" />
-        </SessionProvider>
+        </ClientProviders>
       </body>
     </html>
   );
 }
-

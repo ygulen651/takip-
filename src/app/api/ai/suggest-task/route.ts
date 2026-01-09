@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+// Global instance removed to ensure key is read from env on each request
 
 export async function POST(req: Request) {
     try {
@@ -18,13 +18,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Başlık gerekli" }, { status: 400 });
         }
 
-        if (!process.env.GEMINI_API_KEY) {
-            return NextResponse.json({
-                suggestion: "Gemini API anahtarı yapılandırılmamış."
-            });
+        const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+        if (!apiKey || apiKey.length < 10) {
+            return NextResponse.json({ suggestion: "Gemini API anahtarı yapılandırılmamış." });
         }
-
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `
       Sen bir proje yöneticisi asistanısın. Aşağıdaki görev başlığına göre profesyonel, detaylı ve maddeler halinde bir görev açıklaması yaz.
@@ -35,13 +32,27 @@ export async function POST(req: Request) {
       Cevabını doğrudan açıklama metni olarak ver, başka bir giriş yapma.
     `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
+        const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            console.error("Gemini Suggest Error Response:", JSON.stringify(result, null, 2));
+            throw new Error(result.error?.message || "Gemini API request failed");
+        }
+
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Öneri oluşturulamadı.";
         return NextResponse.json({ suggestion: text });
-    } catch (error) {
+    } catch (error: any) {
         console.error("AI Suggest Error:", error);
-        return NextResponse.json({ error: "Öneri oluşturulurken bir hata oluştu." }, { status: 500 });
+        return NextResponse.json({ error: "Öneri oluşturulurken bir hata oluştu: " + error.message }, { status: 500 });
     }
 }

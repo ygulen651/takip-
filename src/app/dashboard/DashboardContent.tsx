@@ -60,9 +60,15 @@ export default function DashboardContent({ isAdmin }: { isAdmin: boolean }) {
         body: JSON.stringify({ data: dashboardData }),
       });
       const result = await res.json();
-      setAiSummary(result.summary || "AI özeti alınamadı.");
+
+      if (!res.ok) {
+        setAiSummary(result.error || result.summary || "AI özeti alınamadı.");
+      } else {
+        setAiSummary(result.summary || "AI özeti boş döndü.");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("AI Fetch Error:", error);
+      setAiSummary("Bağlantı hatası: AI servisine ulaşılamadı.");
     } finally {
       setIsAiLoading(false);
     }
